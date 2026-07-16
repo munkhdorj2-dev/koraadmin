@@ -50,6 +50,41 @@ let state = {
 let venueMap = null;
 let venueMarker = null;
 
+function getHistoryState() {
+  return {
+    screen: state.screen,
+    type: state.type,
+    venueSearch: state.venueSearch,
+  };
+}
+
+function syncHistory(mode = 'push') {
+  const payload = getHistoryState();
+  if (mode === 'replace') {
+    window.history.replaceState(payload, '');
+  } else {
+    window.history.pushState(payload, '');
+  }
+}
+
+function goToScreen(screen, options = {}) {
+  const {
+    push = true,
+    replace = false,
+    type = state.type,
+    venueSearch = state.venueSearch,
+  } = options;
+  state.screen = screen;
+  state.type = type;
+  state.venueSearch = venueSearch;
+  if (replace) {
+    syncHistory('replace');
+  } else if (push) {
+    syncHistory('push');
+  }
+  render();
+}
+
 async function boot() {
   const cfg = window.KORA_CONFIG;
   if (!cfg?.supabaseUrl || !cfg?.supabaseAnonKey || cfg.supabaseUrl.includes('YOUR_PROJECT')) {
@@ -64,6 +99,35 @@ async function boot() {
     state.error = e.message;
     state.screen = 'setup';
   }
+  syncHistory('replace');
+  window.addEventListener('popstate', handlePopState);
+  render();
+}
+
+async function handlePopState(event) {
+  const route = event.state;
+  if (!route?.screen) return;
+  state.type = route.type ?? null;
+  state.venueSearch = route.venueSearch || '';
+
+  if (route.screen === 'venue-list' && route.type) {
+    await loadVenueType(route.type, { push: false });
+    return;
+  }
+  if (route.screen === 'banner-list' && route.type) {
+    await loadBannerType(route.type, { push: false });
+    return;
+  }
+  if (route.screen === 'requests') {
+    await loadRequestsScreen({ push: false });
+    return;
+  }
+  if (route.screen === 'news-list') {
+    await loadNewsScreen({ push: false });
+    return;
+  }
+
+  state.screen = route.screen;
   render();
 }
 
@@ -149,8 +213,7 @@ async function submitPin() {
       return;
     }
     sessionStorage.setItem('kora_admin_ok', '1');
-    state.screen = 'home';
-    render();
+    goToScreen('home');
   } catch (e) {
     showError(e.message);
   }
@@ -195,18 +258,18 @@ function renderHome() {
   $$('.cat-card').forEach((btn) => {
     btn.onclick = () => loadVenueType(btn.dataset.type);
   });
-  $('#open-banners').onclick = () => { state.screen = 'banner-types'; render(); };
+  $('#open-banners').onclick = () => { goToScreen('banner-types'); };
   $('#open-requests').onclick = loadRequestsScreen;
   $('#open-news').onclick = loadNewsScreen;
-  $('#open-settings').onclick = () => { state.screen = 'settings'; render(); };
+  $('#open-settings').onclick = () => { goToScreen('settings'); };
   $('#logout-btn').onclick = () => {
     sessionStorage.removeItem('kora_admin_ok');
-    state.screen = 'pin';
-    render();
+    goToScreen('pin');
   };
 }
 
-async function loadVenueType(type) {
+async function loadVenueType(type, options = {}) {
+  const { push = true } = options;
   showError('');
   state.type = type;
   state.venueSearch = '';
@@ -214,11 +277,9 @@ async function loadVenueType(type) {
   render();
   try {
     state.venues = await fetchVenues(type);
-    state.screen = 'venue-list';
-    render();
+    goToScreen('venue-list', { push, type, venueSearch: '' });
   } catch (e) {
-    state.screen = 'home';
-    render();
+    goToScreen('home', { push: false });
     showError(e.message);
   }
 }
@@ -241,15 +302,14 @@ function renderVenueList() {
       </table>
     </div>
   `);
-  $('#back-home').onclick = () => { state.screen = 'home'; render(); };
+  $('#back-home').onclick = () => { window.history.back(); };
   $('#venue-search').oninput = (e) => {
     state.venueSearch = e.target.value;
     updateVenueListResults();
   };
   $('#add-venue').onclick = () => {
     state.form = emptyForm();
-    state.screen = 'venue-form';
-    render();
+    goToScreen('venue-form');
   };
   updateVenueListResults();
 }
@@ -290,8 +350,7 @@ function updateVenueListResults() {
     btn.onclick = () => {
       const row = state.venues.find((v) => v.id === btn.dataset.edit);
       state.form = rowToForm(row);
-      state.screen = 'venue-form';
-      render();
+      goToScreen('venue-form', { push: true, type: state.type, venueSearch: state.venueSearch });
     };
   });
   $$('[data-del]').forEach((btn) => {
@@ -398,7 +457,7 @@ function renderVenueForm() {
     </form>
   `);
 
-  $('#back-list').onclick = () => { state.screen = 'venue-list'; render(); };
+  $('#back-list').onclick = () => { window.history.back(); };
   $('#save-btn').onclick = saveVenueForm;
   $('#my-loc').onclick = useMyLocation;
   $('#f-lat').oninput = updateLocationPreview;
@@ -514,24 +573,23 @@ function renderBannerTypes() {
     <div class="toolbar"><button class="btn btn-ghost" id="back-home">← Буцах</button></div>
     <div class="cat-grid">${cards}</div>
   `);
-  $('#back-home').onclick = () => { state.screen = 'home'; render(); };
+  $('#back-home').onclick = () => { window.history.back(); };
   $$('[data-banner-type]').forEach((btn) => {
     btn.onclick = () => loadBannerType(btn.dataset.bannerType);
   });
 }
 
-async function loadBannerType(type) {
+async function loadBannerType(type, options = {}) {
+  const { push = true } = options;
   showError('');
   state.type = type;
   state.screen = 'loading';
   render();
   try {
     state.banners = await fetchBanners(type);
-    state.screen = 'banner-list';
-    render();
+    goToScreen('banner-list', { push, type });
   } catch (e) {
-    state.screen = 'banner-types';
-    render();
+    goToScreen('banner-types', { push: false });
     showError(e.message);
   }
 }
@@ -561,18 +619,16 @@ function renderBannerList() {
       </table>
     </div>
   `);
-  $('#back-banner-types').onclick = () => { state.screen = 'banner-types'; render(); };
+  $('#back-banner-types').onclick = () => { window.history.back(); };
   $('#add-banner').onclick = () => {
     state.bannerForm = emptyBannerForm();
-    state.screen = 'banner-form';
-    render();
+    goToScreen('banner-form');
   };
   $$('[data-edit-banner]').forEach((btn) => {
     btn.onclick = () => {
       const row = state.banners.find((b) => b.id === btn.dataset.editBanner);
       state.bannerForm = rowToBannerForm(row);
-      state.screen = 'banner-form';
-      render();
+      goToScreen('banner-form');
     };
   });
   $$('[data-del-banner]').forEach((btn) => {
@@ -605,7 +661,7 @@ function renderBannerForm() {
       <label class="field"><span>Эрэмбэ</span><input class="input" id="b-sort" type="number" value="${Number(f.sortOrder) || 0}" /></label>
     </form>
   `);
-  $('#back-banner-list').onclick = () => { state.screen = 'banner-list'; render(); };
+  $('#back-banner-list').onclick = () => { window.history.back(); };
   $('#save-banner').onclick = saveBannerForm;
   $('#banner-upload').onchange = async (e) => {
     const file = e.target.files?.[0];
@@ -638,17 +694,16 @@ async function saveBannerForm() {
   }
 }
 
-async function loadRequestsScreen() {
+async function loadRequestsScreen(options = {}) {
+  const { push = true } = options;
   showError('');
   state.screen = 'loading';
   render();
   try {
     state.requests = await fetchRequests();
-    state.screen = 'requests';
-    render();
+    goToScreen('requests', { push });
   } catch (e) {
-    state.screen = 'home';
-    render();
+    goToScreen('home', { push: false });
     showError(e.message);
   }
 }
@@ -680,7 +735,7 @@ function renderRequests() {
     </div>
     <div class="request-list">${rows || '<div class="card muted">Хүсэлт байхгүй</div>'}</div>
   `);
-  $('#back-home').onclick = () => { state.screen = 'home'; render(); };
+  $('#back-home').onclick = () => { window.history.back(); };
   $('#refresh-req').onclick = loadRequestsScreen;
   $$('[data-mark]').forEach((btn) => {
     btn.onclick = async () => {
@@ -705,17 +760,16 @@ function renderRequests() {
   });
 }
 
-async function loadNewsScreen() {
+async function loadNewsScreen(options = {}) {
+  const { push = true } = options;
   showError('');
   state.screen = 'loading';
   render();
   try {
     state.news = await fetchNews();
-    state.screen = 'news-list';
-    render();
+    goToScreen('news-list', { push });
   } catch (e) {
-    state.screen = 'home';
-    render();
+    goToScreen('home', { push: false });
     showError(e.message);
   }
 }
@@ -743,18 +797,16 @@ function renderNewsList() {
       </table>
     </div>
   `);
-  $('#back-home').onclick = () => { state.screen = 'home'; render(); };
+  $('#back-home').onclick = () => { window.history.back(); };
   $('#add-news').onclick = () => {
     state.newsForm = emptyNewsForm();
-    state.screen = 'news-form';
-    render();
+    goToScreen('news-form');
   };
   $$('[data-edit-news]').forEach((btn) => {
     btn.onclick = () => {
       const row = state.news.find((n) => n.id === btn.dataset.editNews);
       state.newsForm = rowToNewsForm(row);
-      state.screen = 'news-form';
-      render();
+      goToScreen('news-form');
     };
   });
   $$('[data-del-news]').forEach((btn) => {
@@ -793,7 +845,7 @@ function renderNewsForm() {
       <label class="field"><span>Хэнд харагдах</span><select class="input" id="n-audience">${audienceOpts}</select></label>
     </form>
   `);
-  $('#back-news-list').onclick = () => { state.screen = 'news-list'; render(); };
+  $('#back-news-list').onclick = () => { window.history.back(); };
   $('#save-news').onclick = saveNewsForm;
   $('#news-upload').onchange = async (e) => {
     const file = e.target.files?.[0];
@@ -837,7 +889,7 @@ function renderSettings() {
       <p class="muted small">Хадгалсны дараа mobile app болон web admin хоёул шинэ PIN-ээр нэвтэрнэ.</p>
     </section>
   `);
-  $('#back-home').onclick = () => { state.screen = 'home'; render(); };
+  $('#back-home').onclick = () => { window.history.back(); };
   $('#save-pin').onclick = async () => {
     try {
       const pin = ($('#new-pin')?.value || '').trim();
