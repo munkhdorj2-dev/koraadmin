@@ -194,6 +194,12 @@ export function rowToForm(row) {
     accommodationUnits,
     latitude: coords.latitude ?? 47.9188,
     longitude: coords.longitude ?? 106.9174,
+    distanceFromUbKm:
+      row.distance_from_ub_km != null && row.distance_from_ub_km !== ''
+        ? String(row.distance_from_ub_km)
+        : coords.distanceFromUbKm != null && coords.distanceFromUbKm !== ''
+          ? String(coords.distanceFromUbKm)
+          : '',
     images,
     featured: Boolean(row.featured),
     visible: row.visible !== false,
@@ -247,7 +253,15 @@ export function formToRow(form, type) {
     featured: Boolean(form.featured),
     visible: form.visible !== false,
     features: form.features || {},
-    coordinates: { latitude: Number(form.latitude), longitude: Number(form.longitude) },
+    coordinates: (() => {
+      const payload = {
+        latitude: Number(form.latitude),
+        longitude: Number(form.longitude),
+      };
+      const km = Number(String(form.distanceFromUbKm || '').replace(/[^\d.]/g, ''));
+      if (Number.isFinite(km) && km >= 0) payload.distanceFromUbKm = km;
+      return payload;
+    })(),
     facebook: form.facebook || '',
     instagram: form.instagram || '',
     closed_days: form.closedDays || [],
@@ -340,6 +354,7 @@ export function emptyForm() {
     accommodationUnits: [],
     latitude: 47.9188,
     longitude: 106.9174,
+    distanceFromUbKm: '',
     images: [],
     featured: false,
     visible: true,

@@ -559,6 +559,11 @@ function renderVenueForm() {
           <div id="venue-map" class="venue-map"></div>
           <p class="muted small map-hint">Pin-ийг чирэх эсвэл газар дээр дарж байршил сонгоно</p>
         </div>
+        ${(isHotel || isResort) ? `
+        <label class="field"><span>УБ-аас зай (машин зам, км)</span>
+          <p class="hint">Google Maps машин замаар — хоосон бол map шулуун шугамаар автомат</p>
+          <input class="input" id="f-distance-ub" value="${esc(f.distanceFromUbKm || '')}" placeholder="40" inputmode="numeric" />
+        </label>` : ''}
       </div>
       ${priceSection}
       <label class="field"><span>Facebook</span><input class="input" id="f-fb" value="${esc(f.facebook)}" /></label>
@@ -826,6 +831,9 @@ async function saveVenueForm() {
     f.hours = $('#f-hours').value;
     f.latitude = parseFloat($('#f-lat').value) || 47.9188;
     f.longitude = parseFloat($('#f-lng').value) || 106.9174;
+    if ($('#f-distance-ub')) {
+      f.distanceFromUbKm = ($('#f-distance-ub').value || '').replace(/[^\d]/g, '');
+    }
     f.facebook = $('#f-fb').value;
     f.instagram = $('#f-ig').value;
     f.visible = $('#f-visible').checked;
