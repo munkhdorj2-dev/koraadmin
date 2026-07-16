@@ -245,6 +245,53 @@ textarea.input { resize: vertical; min-height: 80px; }
   font-weight: 700;
 }
 .stats-loading { margin-bottom: 20px; }
+.stat-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.venue-stats-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.venue-stats-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--muted);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.venue-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.venue-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: center;
+  padding: 8px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+}
+.venue-stat-value {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--accent);
+}
+.venue-stat-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+@media (max-width: 520px) {
+  .venue-stats-grid { grid-template-columns: 1fr; }
+}
 .sort-cell { width: 56px; white-space: nowrap; }
 .sort-btns {
   display: flex;

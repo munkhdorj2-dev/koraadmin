@@ -354,7 +354,7 @@ function renderVenueList() {
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th></th><th>Нэр</th><th>Төлөв</th><th>VIP</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Нэр</th><th>Залгасан</th><th>Зам</th><th>Төлөв</th><th>VIP</th><th></th></tr></thead>
         <tbody id="venue-table-body"></tbody>
       </table>
     </div>
@@ -403,6 +403,8 @@ function updateVenueListResults() {
       <tr>
         <td class="sort-cell">${sortBtns}</td>
         <td><strong>${esc(v.name)}</strong><br><span class="muted small">${esc(v.district || v.location || '')}</span></td>
+        <td class="stat-num">${Number(v.call_count) || 0}</td>
+        <td class="stat-num">${Number(v.direction_count) || 0}</td>
         <td>${v.visible === false ? '🔒 Нуугдсан' : '✓ Идэвхтэй'}</td>
         <td>${v.featured ? '⭐' : '—'}</td>
         <td class="actions-cell">
@@ -412,7 +414,7 @@ function updateVenueListResults() {
       </tr>
     `;
       }).join('')
-    : `<tr><td colspan="5" class="muted">${query ? 'Олдсонгүй' : 'Одоогоор хоосон'}</td></tr>`;
+    : `<tr><td colspan="7" class="muted">${query ? 'Олдсонгүй' : 'Одоогоор хоосон'}</td></tr>`;
 
   $$('[data-move-up]').forEach((btn) => {
     btn.onclick = () => moveVenue(btn.dataset.moveUp, 'up');
@@ -532,11 +534,28 @@ function renderVenueForm() {
       </label>`;
   }
 
+  const calls = Number(f.call_count) || 0;
+  const directions = Number(f.direction_count) || 0;
+  const ratingCount = Number(f.rating_count) || 0;
+  const ratingSum = Number(f.rating_sum) || 0;
+  const ratingAvg = ratingCount > 0 ? (ratingSum / ratingCount).toFixed(1) : '—';
+  const statsBox = f.id ? `
+    <div class="venue-stats-box">
+      <div class="venue-stats-title">Статистик</div>
+      <div class="venue-stats-grid">
+        <div class="venue-stat"><span class="venue-stat-value">${calls}</span><span class="venue-stat-label">Залгасан</span></div>
+        <div class="venue-stat"><span class="venue-stat-value">${directions}</span><span class="venue-stat-label">Зам заасан</span></div>
+        <div class="venue-stat"><span class="venue-stat-value">${ratingAvg}</span><span class="venue-stat-label">Үнэлгээ (${ratingCount})</span></div>
+      </div>
+    </div>
+  ` : '';
+
   shell(f.id ? 'Газар засах' : 'Шинэ газар', `
     <div class="toolbar">
       <button class="btn btn-ghost" id="back-list">← Жагсаалт</button>
       <button class="btn btn-primary" id="save-btn">Хадгалах</button>
     </div>
+    ${statsBox}
     <form class="form-grid" onsubmit="return false">
       <label class="field"><span>Нэр *</span><input class="input" id="f-name" value="${esc(f.name)}" /></label>
       <label class="field"><span>Утас</span><input class="input" id="f-phone" value="${esc(f.phone)}" /></label>
