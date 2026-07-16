@@ -51,6 +51,41 @@ export async function deleteVenue(id) {
   if (error) throw error;
 }
 
+export async function updateVenueSortOrders(updates) {
+  await Promise.all(updates.map(({ id, sort_order }) =>
+    client.from('venues').update({ sort_order, updated_at: new Date().toISOString() }).eq('id', id)
+  ));
+}
+
+export async function fetchDashboardStats() {
+  const [venuesRes, bannersRes, newsRes, requests] = await Promise.all([
+    client.from('venues').select('type'),
+    client.from('banners').select('id', { count: 'exact', head: true }),
+    client.from('app_news').select('id', { count: 'exact', head: true }),
+    client.from('venue_requests').select('status'),
+  ]);
+
+  if (venuesRes.error) throw venuesRes.error;
+  if (bannersRes.error) throw bannersRes.error;
+  if (newsRes.error) throw newsRes.error;
+  if (requests.error) throw requests.error;
+
+  const venuesByType = Object.fromEntries(VENUE_TYPES.map((t) => [t.id, 0]));
+  (venuesRes.data || []).forEach((v) => {
+    if (venuesByType[v.type] != null) venuesByType[v.type] += 1;
+  });
+
+  const requestRows = requests.data || [];
+  return {
+    venuesByType,
+    totalVenues: (venuesRes.data || []).length,
+    banners: bannersRes.count || 0,
+    news: newsRes.count || 0,
+    newRequests: requestRows.filter((r) => r.status === 'new').length,
+    totalRequests: requestRows.length,
+  };
+}
+
 export async function fetchBanners(type) {
   const { data, error } = await client
     .from('banners')

@@ -17,6 +17,8 @@ import {
   fetchRequests,
   updateRequestStatus,
   deleteRequest,
+  updateVenueSortOrders,
+  fetchDashboardStats,
   uploadImage,
   rowToForm,
   formToRow,
@@ -44,6 +46,7 @@ let state = {
   form: emptyForm(),
   bannerForm: emptyBannerForm(),
   newsForm: emptyNewsForm(),
+  dashboardStats: null,
   error: '',
 };
 
@@ -220,14 +223,40 @@ async function submitPin() {
 }
 
 function renderHome() {
+  const stats = state.dashboardStats;
   const venueCards = VENUE_TYPES.map((t) => `
     <button class="cat-card" data-type="${t.id}" style="--accent:${t.color}">
       <span class="cat-title">${t.title}</span>
-      <span class="cat-go">Газрууд →</span>
+      <span class="cat-go">${stats ? `${stats.venuesByType[t.id] || 0} газар` : 'Газрууд →'}</span>
     </button>
   `).join('');
-  const newRequestCount = state.requests.filter((item) => item.status === 'new').length;
+
+  const statsBlock = stats ? `
+    <section class="section-block">
+      <h2 class="section-title">Статистик</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-value">${stats.totalVenues}</span>
+          <span class="stat-label">Нийт газар</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">${stats.banners}</span>
+          <span class="stat-label">Banner</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">${stats.news}</span>
+          <span class="stat-label">Мэдээ</span>
+        </div>
+        <div class="stat-card ${stats.newRequests ? 'stat-card-alert' : ''}">
+          <span class="stat-value">${stats.newRequests}</span>
+          <span class="stat-label">Шинэ хүсэлт</span>
+        </div>
+      </div>
+    </section>
+  ` : '<p class="muted stats-loading">Статистик ачааллаж байна…</p>';
+
   shell('Admin Home', `
+    ${statsBlock}
     <section class="section-block">
       <h2 class="section-title">Газар удирдах</h2>
       <div class="cat-grid">${venueCards}</div>
@@ -237,15 +266,15 @@ function renderHome() {
       <div class="dashboard-grid">
         <button class="dashboard-card" id="open-banners">
           <strong>Banner</strong>
-          <span class="muted">Ангилал тус бүрийн header banner</span>
+          <span class="muted">${stats ? `${stats.banners} banner` : 'Ангилал тус бүрийн header banner'}</span>
         </button>
         <button class="dashboard-card" id="open-requests">
           <strong>Бүртгүүлэх хүсэлт</strong>
-          <span class="muted">${newRequestCount ? `${newRequestCount} шинэ хүсэлт` : 'Шинэ хүсэлт алга'}</span>
+          <span class="muted">${stats?.newRequests ? `${stats.newRequests} шинэ / ${stats.totalRequests} нийт` : 'Шинэ хүсэлт алга'}</span>
         </button>
         <button class="dashboard-card" id="open-news">
           <strong>Мэдээ</strong>
-          <span class="muted">App дотор харагдах мэдээ</span>
+          <span class="muted">${stats ? `${stats.news} мэдээ` : 'App дотор харагдах мэдээ'}</span>
         </button>
         <button class="dashboard-card" id="open-settings">
           <strong>Тохиргоо</strong>
@@ -253,7 +282,12 @@ function renderHome() {
         </button>
       </div>
     </section>
-  `, `<button class="btn btn-ghost" id="logout-btn">Гарах</button>`);
+  `, `<button class="btn btn-ghost" id="refresh-stats">Сэргээх</button><button class="btn btn-ghost" id="logout-btn">Гарах</button>`);
+
+  if (!stats) {
+    loadDashboardStats().then(() => render());
+    return;
+  }
 
   $$('.cat-card').forEach((btn) => {
     btn.onclick = () => loadVenueType(btn.dataset.type);
@@ -262,10 +296,32 @@ function renderHome() {
   $('#open-requests').onclick = loadRequestsScreen;
   $('#open-news').onclick = loadNewsScreen;
   $('#open-settings').onclick = () => { goToScreen('settings'); };
+  $('#refresh-stats').onclick = async () => {
+    state.dashboardStats = null;
+    await loadDashboardStats();
+    render();
+  };
   $('#logout-btn').onclick = () => {
     sessionStorage.removeItem('kora_admin_ok');
     goToScreen('pin');
   };
+}
+
+async function loadDashboardStats() {
+  try {
+    state.dashboardStats = await fetchDashboardStats();
+    state.requests = await fetchRequests();
+  } catch (e) {
+    state.dashboardStats = {
+      venuesByType: Object.fromEntries(VENUE_TYPES.map((t) => [t.id, 0])),
+      totalVenues: 0,
+      banners: 0,
+      news: 0,
+      newRequests: 0,
+      totalRequests: 0,
+    };
+    showError(e.message);
+  }
 }
 
 async function loadVenueType(type, options = {}) {
@@ -297,7 +353,7 @@ function renderVenueList() {
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Нэр</th><th>Төлөв</th><th>VIP</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Нэр</th><th>Төлөв</th><th>VIP</th><th></th></tr></thead>
         <tbody id="venue-table-body"></tbody>
       </table>
     </div>
@@ -330,11 +386,21 @@ function updateVenueListResults() {
   const count = $('#venue-search-count');
   if (!tbody || !count) return;
   const query = state.venueSearch.trim().toLowerCase();
+  const canReorder = !query;
   const filteredVenues = getFilteredVenues();
   count.textContent = `${filteredVenues.length} / ${state.venues.length}`;
   tbody.innerHTML = filteredVenues.length
-    ? filteredVenues.map((v) => `
+    ? filteredVenues.map((v, i) => {
+        const fullIdx = state.venues.findIndex((row) => row.id === v.id);
+        const sortBtns = canReorder ? `
+          <div class="sort-btns">
+            <button type="button" class="btn btn-sm btn-ghost sort-btn" data-move-up="${v.id}" ${fullIdx <= 0 ? 'disabled' : ''} title="Дээш">↑</button>
+            <button type="button" class="btn btn-sm btn-ghost sort-btn" data-move-down="${v.id}" ${fullIdx >= state.venues.length - 1 ? 'disabled' : ''} title="Доош">↓</button>
+          </div>
+        ` : '<span class="muted small">—</span>';
+        return `
       <tr>
+        <td class="sort-cell">${sortBtns}</td>
         <td><strong>${esc(v.name)}</strong><br><span class="muted small">${esc(v.district || v.location || '')}</span></td>
         <td>${v.visible === false ? '🔒 Нуугдсан' : '✓ Идэвхтэй'}</td>
         <td>${v.featured ? '⭐' : '—'}</td>
@@ -343,9 +409,16 @@ function updateVenueListResults() {
           <button class="btn btn-sm btn-danger" data-del="${v.id}">Устгах</button>
         </td>
       </tr>
-    `).join('')
-    : `<tr><td colspan="4" class="muted">${query ? 'Олдсонгүй' : 'Одоогоор хоосон'}</td></tr>`;
+    `;
+      }).join('')
+    : `<tr><td colspan="5" class="muted">${query ? 'Олдсонгүй' : 'Одоогоор хоосон'}</td></tr>`;
 
+  $$('[data-move-up]').forEach((btn) => {
+    btn.onclick = () => moveVenue(btn.dataset.moveUp, 'up');
+  });
+  $$('[data-move-down]').forEach((btn) => {
+    btn.onclick = () => moveVenue(btn.dataset.moveDown, 'down');
+  });
   $$('[data-edit]').forEach((btn) => {
     btn.onclick = () => {
       const row = state.venues.find((v) => v.id === btn.dataset.edit);
@@ -358,12 +431,34 @@ function updateVenueListResults() {
       if (!confirm('Устгах уу?')) return;
       try {
         await deleteVenue(btn.dataset.del);
-        await loadVenueType(state.type);
+        state.dashboardStats = null;
+        await loadVenueType(state.type, { push: false });
       } catch (e) {
         showError(e.message);
       }
     };
   });
+}
+
+async function moveVenue(id, direction) {
+  if (state.venueSearch.trim()) return;
+  const list = [...state.venues];
+  const idx = list.findIndex((v) => v.id === id);
+  if (idx < 0) return;
+  const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= list.length) return;
+
+  [list[idx], list[swapIdx]] = [list[swapIdx], list[idx]];
+  const updates = list.map((v, i) => ({ id: v.id, sort_order: i }));
+
+  try {
+    await updateVenueSortOrders(updates);
+    state.venues = list.map((v, i) => ({ ...v, sort_order: i }));
+    state.dashboardStats = null;
+    updateVenueListResults();
+  } catch (e) {
+    showError(e.message);
+  }
 }
 
 function renderVenueForm() {
@@ -555,8 +650,10 @@ async function saveVenueForm() {
       f.price = $('#f-price').value;
     }
     const row = formToRow(f, state.type);
+    if (!state.form.id) row.sort_order = state.venues.length;
     await saveVenue(state.type, row);
-    await loadVenueType(state.type);
+    state.dashboardStats = null;
+    await loadVenueType(state.type, { push: false });
   } catch (e) {
     showError(e.message);
   }

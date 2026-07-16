@@ -152,6 +152,51 @@ textarea.input { resize: vertical; min-height: 80px; }
   gap: 6px;
 }
 .dashboard-card strong { font-size: 16px; }
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-card-alert {
+  border-color: rgba(255, 107, 53, 0.45);
+  background: rgba(255, 107, 53, 0.08);
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--accent);
+  line-height: 1.1;
+}
+.stat-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.stats-loading { margin-bottom: 20px; }
+.sort-cell { width: 56px; white-space: nowrap; }
+.sort-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sort-btn {
+  min-width: 32px;
+  padding: 2px 6px;
+  line-height: 1.2;
+}
+.sort-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
 .thumb {
   width: 120px;
   height: 48px;
