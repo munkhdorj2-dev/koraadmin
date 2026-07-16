@@ -196,11 +196,14 @@ textarea.input { resize: vertical; min-height: 80px; }
   overflow: hidden;
   background: #111;
 }
-.map-preview {
+.venue-map {
   width: 100%;
   height: 280px;
-  border: 0;
-  display: block;
+  z-index: 1;
+}
+.map-hint {
+  margin: 8px 0 0;
+  padding: 0 2px;
 }
 .request-list { display: flex; flex-direction: column; gap: 12px; }
 .request-card {

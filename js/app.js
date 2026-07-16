@@ -47,6 +47,9 @@ let state = {
   error: '',
 };
 
+let venueMap = null;
+let venueMarker = null;
+
 async function boot() {
   const cfg = window.KORA_CONFIG;
   if (!cfg?.supabaseUrl || !cfg?.supabaseAnonKey || cfg.supabaseUrl.includes('YOUR_PROJECT')) {
@@ -65,6 +68,7 @@ async function boot() {
 }
 
 function render() {
+  if (state.screen !== 'venue-form') destroyVenueMap();
   switch (state.screen) {
     case 'setup': return renderSetup();
     case 'pin': return renderPin();
@@ -304,6 +308,7 @@ function updateVenueListResults() {
 }
 
 function renderVenueForm() {
+  destroyVenueMap();
   const f = state.form;
   const isHotel = state.type === 'hotel';
   const isResort = state.type === 'resort';
@@ -369,13 +374,8 @@ function renderVenueForm() {
           <a class="btn btn-sm btn-ghost" id="open-maps" href="https://www.google.com/maps?q=${escAttr(f.latitude)},${escAttr(f.longitude)}" target="_blank" rel="noreferrer">Google Maps</a>
         </div>
         <div class="map-preview-wrap">
-          <iframe
-            id="map-preview"
-            class="map-preview"
-            loading="lazy"
-            referrerpolicy="no-referrer-when-downgrade"
-            src="${buildMapPreviewUrl(f.latitude, f.longitude)}"
-          ></iframe>
+          <div id="venue-map" class="venue-map"></div>
+          <p class="muted small map-hint">Pin-ийг чирэх эсвэл газар дээр дарж байршил сонгоно</p>
         </div>
       </div>
       ${priceSection}
@@ -434,6 +434,7 @@ function renderVenueForm() {
     };
     bindUnitRows();
   }
+  requestAnimationFrame(() => initVenueMap());
 }
 
 function renderUnitRow(u, i) {
@@ -866,28 +867,61 @@ function useMyLocation() {
   }, () => alert('Байршлын зөвшөөрөл өгнө үү'));
 }
 
-function updateLocationPreview() {
-  const lat = $('#f-lat')?.value;
-  const lng = $('#f-lng')?.value;
-  const link = $('#open-maps');
-  const map = $('#map-preview');
-  if (link) {
-    link.setAttribute('href', `https://www.google.com/maps?q=${escAttr(lat)},${escAttr(lng)}`);
-  }
-  if (map) {
-    map.setAttribute('src', buildMapPreviewUrl(lat, lng));
+function destroyVenueMap() {
+  if (venueMap) {
+    venueMap.remove();
+    venueMap = null;
+    venueMarker = null;
   }
 }
 
-function buildMapPreviewUrl(lat, lng) {
-  const safeLat = Number(lat) || 47.9188;
-  const safeLng = Number(lng) || 106.9174;
-  const delta = 0.01;
-  const left = safeLng - delta;
-  const right = safeLng + delta;
-  const top = safeLat + delta;
-  const bottom = safeLat - delta;
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${safeLat}%2C${safeLng}`;
+function initVenueMap() {
+  const container = $('#venue-map');
+  if (!container || !window.L) return;
+
+  const lat = parseFloat($('#f-lat')?.value) || 47.9188;
+  const lng = parseFloat($('#f-lng')?.value) || 106.9174;
+
+  venueMap = window.L.map(container, { scrollWheelZoom: true }).setView([lat, lng], 15);
+  window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19,
+  }).addTo(venueMap);
+
+  venueMarker = window.L.marker([lat, lng], { draggable: true }).addTo(venueMap);
+
+  venueMarker.on('dragend', () => {
+    const pos = venueMarker.getLatLng();
+    setCoordsFromMap(pos.lat, pos.lng);
+  });
+
+  venueMap.on('click', (e) => {
+    venueMarker.setLatLng(e.latlng);
+    setCoordsFromMap(e.latlng.lat, e.latlng.lng);
+  });
+
+  requestAnimationFrame(() => venueMap?.invalidateSize());
+}
+
+function setCoordsFromMap(lat, lng) {
+  const latEl = $('#f-lat');
+  const lngEl = $('#f-lng');
+  if (latEl) latEl.value = lat.toFixed(6);
+  if (lngEl) lngEl.value = lng.toFixed(6);
+  updateLocationPreview();
+}
+
+function updateLocationPreview() {
+  const lat = parseFloat($('#f-lat')?.value) || 47.9188;
+  const lng = parseFloat($('#f-lng')?.value) || 106.9174;
+  const link = $('#open-maps');
+  if (link) {
+    link.setAttribute('href', `https://www.google.com/maps?q=${lat},${lng}`);
+  }
+  if (venueMap && venueMarker) {
+    venueMarker.setLatLng([lat, lng]);
+    venueMap.panTo([lat, lng]);
+  }
 }
 
 function getTypeMeta(type) {
