@@ -1,4 +1,4 @@
-import { VENUE_TYPES, emptyHotelPrices, parseHotelPrices, serializeHotelPrices } from './data.js';
+import { VENUE_TYPES, emptyHotelRooms, parseHotelPrices, serializeHotelPrices } from './data.js';
 
 const BUCKET = 'media';
 let client = null;
@@ -165,13 +165,13 @@ export function rowToForm(row) {
   const coords = typeof row.coordinates === 'string' ? JSON.parse(row.coordinates) : row.coordinates || {};
   const images = Array.isArray(row.images) ? row.images : row.image ? [row.image] : [];
   let hotelStars = '';
-  let hotelPrices = emptyHotelPrices();
+  let hotelRooms = emptyHotelRooms();
   let accommodationUnits = [];
   if (row.type === 'hotel' && row.price) {
     try {
-      const p = JSON.parse(row.price);
-      hotelStars = p.stars ? String(p.stars) : '';
-      hotelPrices = parseHotelPrices(p);
+      const p = parseHotelPrices(row.price);
+      hotelStars = p.stars || '';
+      hotelRooms = p.rooms || [];
     } catch { /* plain price */ }
   }
   if (row.type === 'resort' && row.price) {
@@ -189,7 +189,7 @@ export function rowToForm(row) {
     phone: row.phone || '',
     hours: row.hours || '12:00-00:00',
     price: row.type === 'hotel' || row.type === 'resort' ? '' : row.price || '',
-    hotelPrices,
+    hotelRooms,
     hotelStars,
     accommodationUnits,
     latitude: coords.latitude ?? 47.9188,
@@ -216,7 +216,7 @@ export function formToRow(form, type) {
   const id = form.id || `${meta.prefix}${Date.now()}`;
   let price = form.price || '';
   if (type === 'hotel') {
-    price = serializeHotelPrices(form.hotelPrices, form.hotelStars);
+    price = serializeHotelPrices(form.hotelRooms, form.hotelStars);
   }
   if (type === 'resort') {
     const units = (form.accommodationUnits || [])
@@ -335,7 +335,7 @@ export function emptyForm() {
     phone: '',
     hours: '12:00-00:00',
     price: '',
-    hotelPrices: emptyHotelPrices(),
+    hotelRooms: emptyHotelRooms(),
     hotelStars: '',
     accommodationUnits: [],
     latitude: 47.9188,

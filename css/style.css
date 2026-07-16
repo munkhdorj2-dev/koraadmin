@@ -328,8 +328,14 @@ textarea.input { resize: vertical; min-height: 80px; }
 .hotel-bed-title {
   font-size: 14px;
   font-weight: 800;
-  margin-bottom: 10px;
   color: var(--text);
+}
+.hotel-bed-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 .hotel-bed-row {
   display: grid;

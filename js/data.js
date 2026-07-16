@@ -68,65 +68,108 @@ export const ACCOMMODATION_KINDS = [
   { id: 'custom', label: 'Бусад' },
 ];
 
-/** Hotel room tiers: guests = beds × 2. Keys: b1 / b1lux … b5 / b5lux */
-export const HOTEL_BED_KEYS = [1, 2, 3, 4, 5].map((beds) => ({
-  key: String(beds),
-  stdKey: `b${beds}`,
-  luxKey: `b${beds}lux`,
-  label: `${beds * 2} хүний · ${beds} ортой`,
-  placeholder: String(100000 + beds * 50000),
-  luxPlaceholder: String(150000 + beds * 50000),
-}));
-
-export function emptyHotelPrices() {
-  const o = {};
-  HOTEL_BED_KEYS.forEach((bed) => {
-    o[bed.stdKey] = '';
-    o[bed.luxKey] = '';
-  });
-  return o;
+function newHotelRoomId() {
+  return `hr${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+export function emptyHotelRoom(overrides = {}) {
+  return {
+    id: newHotelRoomId(),
+    guests: '2',
+    beds: '1',
+    amount: '',
+    luxAmount: '',
+    ...overrides,
+  };
+}
+
+export function emptyHotelRooms() {
+  return [];
+}
+
+function digitsOnly(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function normalizeHotelRoom(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const amount = digitsOnly(raw.amount);
+  const luxAmount = digitsOnly(raw.luxAmount);
+  if (!amount && !luxAmount) return null;
+  let beds = digitsOnly(raw.beds) || '1';
+  let guests = digitsOnly(raw.guests);
+  if (!guests) guests = String(Math.max(1, Number(beds) * 2));
+  return {
+    id: raw.id || newHotelRoomId(),
+    guests,
+    beds,
+    amount,
+    luxAmount,
+  };
+}
+
+function roomsFromLegacyFlat(obj) {
+  const rooms = [];
+  for (let beds = 1; beds <= 5; beds += 1) {
+    const amount = digitsOnly(obj[`b${beds}`]);
+    const luxAmount = digitsOnly(obj[`b${beds}lux`]);
+    if (!amount && !luxAmount) continue;
+    rooms.push(
+      emptyHotelRoom({
+        guests: String(beds * 2),
+        beds: String(beds),
+        amount,
+        luxAmount,
+      })
+    );
+  }
+  return rooms;
+}
+
+/** Parse hotel price JSON → { rooms, stars }. Supports new rooms[] + legacy b1 keys. */
 export function parseHotelPrices(raw) {
-  const out = emptyHotelPrices();
-  if (!raw) return out;
+  const empty = { rooms: [], stars: '' };
+  if (!raw) return empty;
   let obj = raw;
   if (typeof raw === 'string') {
     try {
       obj = JSON.parse(raw);
     } catch {
-      return out;
+      return empty;
     }
   }
-  if (!obj || typeof obj !== 'object') return out;
-  HOTEL_BED_KEYS.forEach((bed) => {
-    const std = obj[bed.stdKey];
-    const lux = obj[bed.luxKey];
-    out[bed.stdKey] = std != null && std !== '' ? String(std).replace(/\D/g, '') : '';
-    out[bed.luxKey] = lux != null && lux !== '' ? String(lux).replace(/\D/g, '') : '';
-  });
-  return out;
+  if (!obj || typeof obj !== 'object') return empty;
+  const stars = obj.stars ? String(obj.stars) : '';
+  if (Array.isArray(obj.rooms) && obj.rooms.length) {
+    return { rooms: obj.rooms.map(normalizeHotelRoom).filter(Boolean), stars };
+  }
+  if (Array.isArray(obj.units) && obj.units.length) {
+    return { rooms: obj.units.map(normalizeHotelRoom).filter(Boolean), stars };
+  }
+  return { rooms: roomsFromLegacyFlat(obj), stars };
 }
 
-export function serializeHotelPrices(prices, stars) {
-  const body = {};
-  let hasAny = false;
-  HOTEL_BED_KEYS.forEach((bed) => {
-    const std = String(prices?.[bed.stdKey] || '').replace(/\D/g, '');
-    const lux = String(prices?.[bed.luxKey] || '').replace(/\D/g, '');
-    if (std) {
-      body[bed.stdKey] = std;
-      hasAny = true;
-    }
-    if (lux) {
-      body[bed.luxKey] = lux;
-      hasAny = true;
-    }
-  });
+export function serializeHotelPrices(rooms, stars) {
+  const list = (Array.isArray(rooms) ? rooms : [])
+    .map(normalizeHotelRoom)
+    .filter(Boolean);
   const starNum = Number(stars);
-  if (starNum >= 1 && starNum <= 5) {
-    body.stars = starNum;
-    hasAny = true;
-  }
-  return hasAny ? JSON.stringify(body) : '';
+  const hasStars = starNum >= 1 && starNum <= 5;
+  if (!list.length && !hasStars) return '';
+  return JSON.stringify({
+    stars: hasStars ? starNum : null,
+    rooms: list.map((r) => ({
+      id: r.id,
+      guests: r.guests,
+      beds: r.beds,
+      amount: r.amount || null,
+      luxAmount: r.luxAmount || null,
+    })),
+  });
+}
+
+export function hotelRoomTitle(room) {
+  const guests = digitsOnly(room?.guests) || '?';
+  const beds = digitsOnly(room?.beds) || '?';
+  return `${guests} хүний · ${beds} ортой`;
 }

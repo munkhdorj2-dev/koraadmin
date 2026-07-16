@@ -1,6 +1,6 @@
 import {
   VENUE_TYPES, UB_DISTRICTS, REGIONS, FEATURES, FEATURE_LABELS, ACCOMMODATION_KINDS,
-  HOTEL_BED_KEYS,
+  emptyHotelRoom, hotelRoomTitle,
 } from './data.js';
 import {
   initSupabase,
@@ -479,22 +479,35 @@ function renderVenueForm() {
 
   let priceSection = '';
   if (isHotel) {
-    const prices = f.hotelPrices || {};
-    const bedsHtml = HOTEL_BED_KEYS.map((bed) => `
-      <div class="hotel-bed-block">
-        <div class="hotel-bed-title">${esc(bed.label)}</div>
+    const rooms = Array.isArray(f.hotelRooms) ? f.hotelRooms : [];
+    const roomsHtml = rooms.map((room, i) => `
+      <div class="hotel-bed-block" data-hotel-room="${i}">
+        <div class="hotel-bed-head">
+          <div class="hotel-bed-title">${esc(hotelRoomTitle(room))}</div>
+          <button type="button" class="btn btn-sm btn-danger" data-rm-hotel-room="${i}">Устгах</button>
+        </div>
+        <div class="hotel-bed-row">
+          <label class="hotel-bed-col">
+            <span>Хүний тоо</span>
+            <input class="input" data-hguests="${i}" value="${esc(room.guests || '')}" placeholder="2" inputmode="numeric" />
+          </label>
+          <label class="hotel-bed-col">
+            <span>Орны тоо</span>
+            <input class="input" data-hbeds="${i}" value="${esc(room.beds || '')}" placeholder="1" inputmode="numeric" />
+          </label>
+        </div>
         <div class="hotel-bed-row">
           <label class="hotel-bed-col">
             <span>Энгийн</span>
             <div class="hotel-price-input">
-              <input class="input" data-hotel-price="${bed.stdKey}" value="${esc(prices[bed.stdKey] || '')}" placeholder="${bed.placeholder}" inputmode="numeric" />
+              <input class="input" data-hamount="${i}" value="${esc(room.amount || '')}" placeholder="180000" inputmode="numeric" />
               <span class="currency">₮</span>
             </div>
           </label>
           <label class="hotel-bed-col">
             <span>Lux</span>
             <div class="hotel-price-input">
-              <input class="input" data-hotel-price="${bed.luxKey}" value="${esc(prices[bed.luxKey] || '')}" placeholder="${bed.luxPlaceholder}" inputmode="numeric" />
+              <input class="input" data-hlux="${i}" value="${esc(room.luxAmount || '')}" placeholder="230000" inputmode="numeric" />
               <span class="currency">₮</span>
             </div>
           </label>
@@ -506,8 +519,9 @@ function renderVenueForm() {
         <input class="input" id="f-stars" value="${esc(f.hotelStars)}" placeholder="4" inputmode="numeric" /></label>
       <div class="field">
         <span>Өрөөний үнэ (хоног)</span>
-        <p class="hint">Ор бүрт энгийн + lux — байхгүйг хоосон үлдээнэ</p>
-        <div class="hotel-beds">${bedsHtml}</div>
+        <p class="hint">Хүний тоо, орны тоо засна — өрөө нэмэх/устгах</p>
+        <div class="hotel-beds">${roomsHtml || '<p class="muted small">Өрөө байхгүй. Нэмнэ үү.</p>'}</div>
+        <button type="button" class="btn btn-sm" id="add-hotel-room" style="margin-top:10px">+ Өрөө нэмэх</button>
       </div>`;
   } else if (isResort) {
     const units = (f.accommodationUnits || []).map((u, i) => renderUnitRow(u, i)).join('');
@@ -578,7 +592,14 @@ function renderVenueForm() {
   $('#f-lat').oninput = updateLocationPreview;
   $('#f-lng').oninput = updateLocationPreview;
   bindImageGallery();
-  if (isHotel) bindHotelPrices();
+  if (isHotel) {
+    $('#add-hotel-room').onclick = () => {
+      if (!Array.isArray(state.form.hotelRooms)) state.form.hotelRooms = [];
+      state.form.hotelRooms.push(emptyHotelRoom());
+      renderVenueForm();
+    };
+    bindHotelRooms();
+  }
   if (isResort) {
     $('#add-unit').onclick = () => {
       state.form.accommodationUnits.push({ id: `u${Date.now()}`, kind: 'ger', beds: '', label: '', amount: '', luxAmount: '' });
@@ -589,13 +610,46 @@ function renderVenueForm() {
   requestAnimationFrame(() => initVenueMap());
 }
 
-function bindHotelPrices() {
-  if (!state.form.hotelPrices) state.form.hotelPrices = {};
-  $$('[data-hotel-price]').forEach((el) => {
+function bindHotelRooms() {
+  const rooms = state.form.hotelRooms || [];
+  const refreshTitle = (i) => {
+    const block = document.querySelector(`[data-hotel-room="${i}"] .hotel-bed-title`);
+    if (block && rooms[i]) block.textContent = hotelRoomTitle(rooms[i]);
+  };
+  $$('[data-hguests]').forEach((el) => {
     el.oninput = () => {
-      const key = el.dataset.hotelPrice;
-      state.form.hotelPrices[key] = el.value.replace(/\D/g, '');
-      el.value = state.form.hotelPrices[key];
+      const i = Number(el.dataset.hguests);
+      rooms[i].guests = el.value.replace(/\D/g, '');
+      el.value = rooms[i].guests;
+      refreshTitle(i);
+    };
+  });
+  $$('[data-hbeds]').forEach((el) => {
+    el.oninput = () => {
+      const i = Number(el.dataset.hbeds);
+      rooms[i].beds = el.value.replace(/\D/g, '');
+      el.value = rooms[i].beds;
+      refreshTitle(i);
+    };
+  });
+  $$('[data-hamount]').forEach((el) => {
+    el.oninput = () => {
+      const i = Number(el.dataset.hamount);
+      rooms[i].amount = el.value.replace(/\D/g, '');
+      el.value = rooms[i].amount;
+    };
+  });
+  $$('[data-hlux]').forEach((el) => {
+    el.oninput = () => {
+      const i = Number(el.dataset.hlux);
+      rooms[i].luxAmount = el.value.replace(/\D/g, '');
+      el.value = rooms[i].luxAmount;
+    };
+  });
+  $$('[data-rm-hotel-room]').forEach((btn) => {
+    btn.onclick = () => {
+      state.form.hotelRooms.splice(Number(btn.dataset.rmHotelRoom), 1);
+      renderVenueForm();
     };
   });
 }
@@ -794,10 +848,7 @@ async function saveVenueForm() {
     f.images = [...state.form.images].map((u) => (u || '').trim()).filter(Boolean);
     if (state.type === 'hotel') {
       f.hotelStars = $('#f-stars').value;
-      f.hotelPrices = { ...(state.form.hotelPrices || {}) };
-      $$('[data-hotel-price]').forEach((el) => {
-        f.hotelPrices[el.dataset.hotelPrice] = el.value.replace(/\D/g, '');
-      });
+      f.hotelRooms = [...(state.form.hotelRooms || [])];
     } else if (state.type !== 'resort') {
       f.price = $('#f-price').value;
     }
