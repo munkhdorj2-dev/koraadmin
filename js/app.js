@@ -3,6 +3,16 @@ import {
   emptyHotelRoom, hotelRoomTitle, HOTEL_ROOM_TIERS,
 } from './data.js';
 import {
+  SUBSCRIPTION_EXTEND_MONTHS,
+  SUBSCRIPTION_FILTERS,
+  getSubscriptionStatus,
+  getSubscriptionStatusMeta,
+  formatDisplayDate,
+  toDateInputValue,
+  extendSubscriptionExpiry,
+  matchesSubscriptionFilter,
+} from './subscription.js';
+import {
   initSupabase,
   fetchAdminPin,
   saveAdminPin,
@@ -44,6 +54,7 @@ let state = {
   requests: [],
   news: [],
   venueSearch: '',
+  venueExpiryFilter: 'all',
   form: emptyForm(),
   bannerForm: emptyBannerForm(),
   newsForm: emptyNewsForm(),
@@ -343,6 +354,9 @@ async function loadVenueType(type, options = {}) {
 
 function renderVenueList() {
   const meta = getTypeMeta(state.type);
+  const filterChips = SUBSCRIPTION_FILTERS.map((f) => `
+    <button type="button" class="filter-chip ${state.venueExpiryFilter === f.id ? 'active' : ''}" data-expiry-filter="${f.id}">${f.label}</button>
+  `).join('');
   shell(meta.title, `
     <div class="toolbar">
       <button class="btn btn-ghost" id="back-home">← Буцах</button>
@@ -352,9 +366,10 @@ function renderVenueList() {
       <input class="input search-input" id="venue-search" value="${esc(state.venueSearch)}" placeholder="Нэр, дүүрэг, хаягаар хайх" />
       <span class="muted small" id="venue-search-count"></span>
     </div>
+    <div class="filter-chips" id="expiry-filters">${filterChips}</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th></th><th>Нэр</th><th>Залгасан</th><th>Зам</th><th>Төлөв</th><th>VIP</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Нэр</th><th>Хугацаа</th><th>Залгасан</th><th>Зам</th><th>Төлөв</th><th></th></tr></thead>
         <tbody id="venue-table-body"></tbody>
       </table>
     </div>
@@ -364,8 +379,17 @@ function renderVenueList() {
     state.venueSearch = e.target.value;
     updateVenueListResults();
   };
+  $$('[data-expiry-filter]').forEach((btn) => {
+    btn.onclick = () => {
+      state.venueExpiryFilter = btn.dataset.expiryFilter;
+      renderVenueList();
+    };
+  });
   $('#add-venue').onclick = () => {
     state.form = emptyForm();
+    const today = toDateInputValue(new Date());
+    state.form.listedAt = today;
+    state.form.expiresAt = extendSubscriptionExpiry(null, 3);
     goToScreen('venue-form');
   };
   updateVenueListResults();
@@ -373,12 +397,14 @@ function renderVenueList() {
 
 function getFilteredVenues() {
   const query = state.venueSearch.trim().toLowerCase();
-  if (!query) return state.venues;
   return state.venues.filter((v) => {
+    if (!matchesSubscriptionFilter(v, state.venueExpiryFilter)) return false;
+    if (!query) return true;
     const name = String(v.name || '').toLowerCase();
     const district = String(v.district || '').toLowerCase();
     const location = String(v.location || '').toLowerCase();
-    return name.includes(query) || district.includes(query) || location.includes(query);
+    const phone = String(v.phone || '').toLowerCase();
+    return name.includes(query) || district.includes(query) || location.includes(query) || phone.includes(query);
   });
 }
 
@@ -387,40 +413,57 @@ function updateVenueListResults() {
   const count = $('#venue-search-count');
   if (!tbody || !count) return;
   const query = state.venueSearch.trim().toLowerCase();
-  const canReorder = !query;
+  const canReorder = !query && state.venueExpiryFilter === 'all';
   const filteredVenues = getFilteredVenues();
   count.textContent = `${filteredVenues.length} / ${state.venues.length}`;
   tbody.innerHTML = filteredVenues.length
-    ? filteredVenues.map((v, i) => {
+    ? filteredVenues.map((v) => {
         const fullIdx = state.venues.findIndex((row) => row.id === v.id);
+        const status = getSubscriptionStatus(v);
+        const meta = getSubscriptionStatusMeta(status);
+        const phone = String(v.phone || '').replace(/\s/g, '');
         const sortBtns = canReorder ? `
           <div class="sort-btns">
             <button type="button" class="btn btn-sm btn-ghost sort-btn" data-move-up="${v.id}" ${fullIdx <= 0 ? 'disabled' : ''} title="Дээш">↑</button>
             <button type="button" class="btn btn-sm btn-ghost sort-btn" data-move-down="${v.id}" ${fullIdx >= state.venues.length - 1 ? 'disabled' : ''} title="Доош">↓</button>
           </div>
         ` : '<span class="muted small">—</span>';
+        const callBtn = phone
+          ? `<a class="btn btn-sm" href="tel:${escAttr(phone)}" title="Залгах">📞</a>`
+          : '';
         return `
-      <tr>
+      <tr class="sub-row-${status}">
         <td class="sort-cell">${sortBtns}</td>
-        <td><strong>${esc(v.name)}</strong><br><span class="muted small">${esc(v.district || v.location || '')}</span></td>
+        <td>
+          <strong>${esc(v.name)}</strong><br>
+          <span class="muted small">${esc(v.district || v.location || '')}${phone ? ` · ${esc(v.phone)}` : ''}</span>
+        </td>
+        <td>
+          <span class="sub-badge ${meta.className}">${meta.label}</span><br>
+          <span class="muted small">${formatDisplayDate(v.expires_at)}</span>
+        </td>
         <td class="stat-num">${Number(v.call_count) || 0}</td>
         <td class="stat-num">${Number(v.direction_count) || 0}</td>
         <td>${v.visible === false ? '🔒 Нуугдсан' : '✓ Идэвхтэй'}</td>
-        <td>${v.featured ? '⭐' : '—'}</td>
         <td class="actions-cell">
+          ${callBtn}
+          <button class="btn btn-sm" data-extend="${v.id}" data-months="3" title="Сунгах +3сар">+3с</button>
           <button class="btn btn-sm" data-edit="${v.id}">Засах</button>
           <button class="btn btn-sm btn-danger" data-del="${v.id}">Устгах</button>
         </td>
       </tr>
     `;
       }).join('')
-    : `<tr><td colspan="7" class="muted">${query ? 'Олдсонгүй' : 'Одоогоор хоосон'}</td></tr>`;
+    : `<tr><td colspan="7" class="muted">${query || state.venueExpiryFilter !== 'all' ? 'Олдсонгүй' : 'Одоогоор хоосон'}</td></tr>`;
 
   $$('[data-move-up]').forEach((btn) => {
     btn.onclick = () => moveVenue(btn.dataset.moveUp, 'up');
   });
   $$('[data-move-down]').forEach((btn) => {
     btn.onclick = () => moveVenue(btn.dataset.moveDown, 'down');
+  });
+  $$('[data-extend]').forEach((btn) => {
+    btn.onclick = () => extendVenueFromList(btn.dataset.extend, Number(btn.dataset.months) || 3);
   });
   $$('[data-edit]').forEach((btn) => {
     btn.onclick = () => {
@@ -441,6 +484,21 @@ function updateVenueListResults() {
       }
     };
   });
+}
+
+async function extendVenueFromList(id, months) {
+  const row = state.venues.find((v) => v.id === id);
+  if (!row) return;
+  try {
+    const form = rowToForm(row);
+    form.expiresAt = extendSubscriptionExpiry(form.expiresAt || row.expires_at, months);
+    if (!form.listedAt) form.listedAt = toDateInputValue(new Date());
+    const payload = formToRow(form, state.type);
+    await saveVenue(state.type, payload);
+    await loadVenueType(state.type, { push: false });
+  } catch (e) {
+    showError(e.message);
+  }
 }
 
 async function moveVenue(id, direction) {
@@ -539,6 +597,8 @@ function renderVenueForm() {
   const ratingCount = Number(f.rating_count) || 0;
   const ratingSum = Number(f.rating_sum) || 0;
   const ratingAvg = ratingCount > 0 ? (ratingSum / ratingCount).toFixed(1) : '—';
+  const subStatus = getSubscriptionStatus({ expiresAt: f.expiresAt, expires_at: f.expiresAt });
+  const subMeta = getSubscriptionStatusMeta(subStatus);
   const statsBox = f.id ? `
     <div class="venue-stats-box">
       <div class="venue-stats-title">Статистик</div>
@@ -549,6 +609,25 @@ function renderVenueForm() {
       </div>
     </div>
   ` : '';
+  const extendBtns = SUBSCRIPTION_EXTEND_MONTHS.map((m) =>
+    `<button type="button" class="btn btn-sm" data-form-extend="${m}">+${m} сар</button>`
+  ).join('');
+  const subscriptionSection = `
+    <div class="field subscription-block">
+      <span>Бүртгэлийн хугацаа</span>
+      <p class="hint">Дуусахад жагсаалтаас шүүж хараад залгана. Сунгах товчоор нэмнэ.</p>
+      <div class="field-row">
+        <label class="field"><span>Бүртгэсэн</span>
+          <input class="input" type="date" id="f-listed-at" value="${esc(toDateInputValue(f.listedAt))}" /></label>
+        <label class="field"><span>Дуусах</span>
+          <input class="input" type="date" id="f-expires-at" value="${esc(toDateInputValue(f.expiresAt))}" /></label>
+      </div>
+      <div class="subscription-actions">
+        <span class="sub-badge ${subMeta.className}" id="f-sub-badge">${subMeta.label}</span>
+        ${extendBtns}
+      </div>
+    </div>
+  `;
 
   shell(f.id ? 'Газар засах' : 'Шинэ газар', `
     <div class="toolbar">
@@ -584,6 +663,7 @@ function renderVenueForm() {
           <input class="input" id="f-distance-ub" value="${esc(f.distanceFromUbKm || '')}" placeholder="40" inputmode="numeric" />
         </label>` : ''}
       </div>
+      ${subscriptionSection}
       ${priceSection}
       <label class="field"><span>Facebook</span><input class="input" id="f-fb" value="${esc(f.facebook)}" /></label>
       <label class="field"><span>Instagram</span><input class="input" id="f-ig" value="${esc(f.instagram)}" /></label>
@@ -610,6 +690,26 @@ function renderVenueForm() {
   $('#my-loc').onclick = useMyLocation;
   $('#f-lat').oninput = updateLocationPreview;
   $('#f-lng').oninput = updateLocationPreview;
+  $$('[data-form-extend]').forEach((btn) => {
+    btn.onclick = () => {
+      const months = Number(btn.dataset.formExtend) || 3;
+      const current = $('#f-expires-at')?.value || state.form.expiresAt;
+      const next = extendSubscriptionExpiry(current, months);
+      if ($('#f-expires-at')) $('#f-expires-at').value = next;
+      state.form.expiresAt = next;
+      if (!$('#f-listed-at')?.value) {
+        const today = toDateInputValue(new Date());
+        if ($('#f-listed-at')) $('#f-listed-at').value = today;
+        state.form.listedAt = today;
+      }
+      const badge = $('#f-sub-badge');
+      if (badge) {
+        const meta = getSubscriptionStatusMeta(getSubscriptionStatus({ expiresAt: next }));
+        badge.className = `sub-badge ${meta.className}`;
+        badge.textContent = meta.label;
+      }
+    };
+  });
   bindImageGallery();
   if (isHotel) {
     $('#add-hotel-room').onclick = () => {
@@ -848,6 +948,8 @@ async function saveVenueForm() {
     f.district = $('#f-district').value;
     f.region = $('#f-region').value;
     f.hours = $('#f-hours').value;
+    f.listedAt = $('#f-listed-at')?.value || '';
+    f.expiresAt = $('#f-expires-at')?.value || '';
     f.latitude = parseFloat($('#f-lat').value) || 47.9188;
     f.longitude = parseFloat($('#f-lng').value) || 106.9174;
     if ($('#f-distance-ub')) {

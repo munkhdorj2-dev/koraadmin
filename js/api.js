@@ -214,6 +214,8 @@ export function rowToForm(row) {
     direction_count: row.direction_count ?? 0,
     rating_sum: row.rating_sum ?? 0,
     rating_count: row.rating_count ?? 0,
+    listedAt: row.listed_at ? String(row.listed_at).slice(0, 10) : '',
+    expiresAt: row.expires_at ? String(row.expires_at).slice(0, 10) : '',
   };
 }
 
@@ -271,6 +273,8 @@ export function formToRow(form, type) {
     direction_count: form.direction_count ?? 0,
     rating_sum: form.rating_sum ?? 0,
     rating_count: form.rating_count ?? 0,
+    listed_at: form.listedAt ? `${form.listedAt}T12:00:00.000Z` : null,
+    expires_at: form.expiresAt ? `${form.expiresAt}T12:00:00.000Z` : null,
   };
 }
 
@@ -355,6 +359,8 @@ export function emptyForm() {
     latitude: 47.9188,
     longitude: 106.9174,
     distanceFromUbKm: '',
+    listedAt: '',
+    expiresAt: '',
     images: [],
     featured: false,
     visible: true,
