@@ -482,6 +482,7 @@ function renderVenueForm() {
       <label class="field"><span>Зочид буудлын од (1-5)</span>
         <input class="input" id="f-stars" value="${esc(f.hotelStars)}" placeholder="4" /></label>
       <label class="field"><span>Өрөөний үнэ (JSON)</span>
+        <p class="hint">b1=2 хүний·1 ор, b2=4 хүний·2 ор … b1lux/b2lux = Lux</p>
         <textarea class="input" id="f-hotel-json" rows="4" placeholder='{"b1":"180000","b1lux":"230000","stars":4}'>${esc(f.hotelPriceJson)}</textarea>
       </label>`;
   } else if (isResort) {
