@@ -221,26 +221,6 @@ async function loadVenueType(type) {
 
 function renderVenueList() {
   const meta = getTypeMeta(state.type);
-  const query = state.venueSearch.trim().toLowerCase();
-  const filteredVenues = !query
-    ? state.venues
-    : state.venues.filter((v) => {
-        const name = String(v.name || '').toLowerCase();
-        const district = String(v.district || '').toLowerCase();
-        const location = String(v.location || '').toLowerCase();
-        return name.includes(query) || district.includes(query) || location.includes(query);
-      });
-  const rows = filteredVenues.map((v) => `
-    <tr>
-      <td><strong>${esc(v.name)}</strong><br><span class="muted small">${esc(v.district || v.location || '')}</span></td>
-      <td>${v.visible === false ? '🔒 Нуугдсан' : '✓ Идэвхтэй'}</td>
-      <td>${v.featured ? '⭐' : '—'}</td>
-      <td class="actions-cell">
-        <button class="btn btn-sm" data-edit="${v.id}">Засах</button>
-        <button class="btn btn-sm btn-danger" data-del="${v.id}">Устгах</button>
-      </td>
-    </tr>
-  `).join('');
   shell(meta.title, `
     <div class="toolbar">
       <button class="btn btn-ghost" id="back-home">← Буцах</button>
@@ -248,25 +228,60 @@ function renderVenueList() {
     </div>
     <div class="search-row">
       <input class="input search-input" id="venue-search" value="${esc(state.venueSearch)}" placeholder="Нэр, дүүрэг, хаягаар хайх" />
-      <span class="muted small">${filteredVenues.length} / ${state.venues.length}</span>
+      <span class="muted small" id="venue-search-count"></span>
     </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Нэр</th><th>Төлөв</th><th>VIP</th><th></th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="4" class="muted">${query ? 'Олдсонгүй' : 'Одоогоор хоосон'}</td></tr>`}</tbody>
+        <tbody id="venue-table-body"></tbody>
       </table>
     </div>
   `);
   $('#back-home').onclick = () => { state.screen = 'home'; render(); };
   $('#venue-search').oninput = (e) => {
     state.venueSearch = e.target.value;
-    renderVenueList();
+    updateVenueListResults();
   };
   $('#add-venue').onclick = () => {
     state.form = emptyForm();
     state.screen = 'venue-form';
     render();
   };
+  updateVenueListResults();
+}
+
+function getFilteredVenues() {
+  const query = state.venueSearch.trim().toLowerCase();
+  if (!query) return state.venues;
+  return state.venues.filter((v) => {
+    const name = String(v.name || '').toLowerCase();
+    const district = String(v.district || '').toLowerCase();
+    const location = String(v.location || '').toLowerCase();
+    return name.includes(query) || district.includes(query) || location.includes(query);
+  });
+}
+
+function updateVenueListResults() {
+  const tbody = $('#venue-table-body');
+  const count = $('#venue-search-count');
+  if (!tbody || !count) return;
+  const query = state.venueSearch.trim().toLowerCase();
+  const filteredVenues = getFilteredVenues();
+  count.textContent = `${filteredVenues.length} / ${state.venues.length}`;
+  tbody.innerHTML = filteredVenues.length
+    ? filteredVenues.map((v) => `
+      <tr>
+        <td><strong>${esc(v.name)}</strong><br><span class="muted small">${esc(v.district || v.location || '')}</span></td>
+        <td>${v.visible === false ? '🔒 Нуугдсан' : '✓ Идэвхтэй'}</td>
+        <td>${v.featured ? '⭐' : '—'}</td>
+        <td class="actions-cell">
+          <button class="btn btn-sm" data-edit="${v.id}">Засах</button>
+          <button class="btn btn-sm btn-danger" data-del="${v.id}">Устгах</button>
+        </td>
+      </tr>
+    `).join('')
+    : `<tr><td colspan="4" class="muted">${query ? 'Олдсонгүй' : 'Одоогоор хоосон'}</td></tr>`;
+
   $$('[data-edit]').forEach((btn) => {
     btn.onclick = () => {
       const row = state.venues.find((v) => v.id === btn.dataset.edit);
@@ -353,6 +368,15 @@ function renderVenueForm() {
           <button type="button" class="btn btn-sm" id="my-loc">📍 Миний байршил</button>
           <a class="btn btn-sm btn-ghost" id="open-maps" href="https://www.google.com/maps?q=${escAttr(f.latitude)},${escAttr(f.longitude)}" target="_blank" rel="noreferrer">Google Maps</a>
         </div>
+        <div class="map-preview-wrap">
+          <iframe
+            id="map-preview"
+            class="map-preview"
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade"
+            src="${buildMapPreviewUrl(f.latitude, f.longitude)}"
+          ></iframe>
+        </div>
       </div>
       ${priceSection}
       <label class="field"><span>Facebook</span><input class="input" id="f-fb" value="${esc(f.facebook)}" /></label>
@@ -377,6 +401,8 @@ function renderVenueForm() {
   $('#back-list').onclick = () => { state.screen = 'venue-list'; render(); };
   $('#save-btn').onclick = saveVenueForm;
   $('#my-loc').onclick = useMyLocation;
+  $('#f-lat').oninput = updateLocationPreview;
+  $('#f-lng').oninput = updateLocationPreview;
   $('#add-img').onclick = () => {
     state.form.images.push('');
     renderVenueForm();
@@ -836,13 +862,32 @@ function useMyLocation() {
   navigator.geolocation.getCurrentPosition((pos) => {
     $('#f-lat').value = pos.coords.latitude.toFixed(6);
     $('#f-lng').value = pos.coords.longitude.toFixed(6);
-    const lat = $('#f-lat').value;
-    const lng = $('#f-lng').value;
-    const link = $('#open-maps');
-    if (link) {
-      link.setAttribute('href', `https://www.google.com/maps?q=${escAttr(lat)},${escAttr(lng)}`);
-    }
+    updateLocationPreview();
   }, () => alert('Байршлын зөвшөөрөл өгнө үү'));
+}
+
+function updateLocationPreview() {
+  const lat = $('#f-lat')?.value;
+  const lng = $('#f-lng')?.value;
+  const link = $('#open-maps');
+  const map = $('#map-preview');
+  if (link) {
+    link.setAttribute('href', `https://www.google.com/maps?q=${escAttr(lat)},${escAttr(lng)}`);
+  }
+  if (map) {
+    map.setAttribute('src', buildMapPreviewUrl(lat, lng));
+  }
+}
+
+function buildMapPreviewUrl(lat, lng) {
+  const safeLat = Number(lat) || 47.9188;
+  const safeLng = Number(lng) || 106.9174;
+  const delta = 0.01;
+  const left = safeLng - delta;
+  const right = safeLng + delta;
+  const top = safeLat + delta;
+  const bottom = safeLat - delta;
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${safeLat}%2C${safeLng}`;
 }
 
 function getTypeMeta(type) {
