@@ -342,6 +342,13 @@ textarea.input { resize: vertical; min-height: 80px; }
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+.hotel-tier-row {
+  grid-template-columns: 1fr 1fr;
+  margin-top: 8px;
+}
+@media (min-width: 720px) {
+  .hotel-tier-row { grid-template-columns: 1fr 1fr 1fr 1fr; }
+}
 .hotel-bed-col {
   display: flex;
   flex-direction: column;

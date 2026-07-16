@@ -1,6 +1,6 @@
 import {
   VENUE_TYPES, UB_DISTRICTS, REGIONS, FEATURES, FEATURE_LABELS, ACCOMMODATION_KINDS,
-  emptyHotelRoom, hotelRoomTitle,
+  emptyHotelRoom, hotelRoomTitle, HOTEL_ROOM_TIERS,
 } from './data.js';
 import {
   initSupabase,
@@ -480,7 +480,17 @@ function renderVenueForm() {
   let priceSection = '';
   if (isHotel) {
     const rooms = Array.isArray(f.hotelRooms) ? f.hotelRooms : [];
-    const roomsHtml = rooms.map((room, i) => `
+    const roomsHtml = rooms.map((room, i) => {
+      const tierInputs = HOTEL_ROOM_TIERS.map((tier) => `
+        <label class="hotel-bed-col">
+          <span>${esc(tier.label)}</span>
+          <div class="hotel-price-input">
+            <input class="input" data-htier="${tier.key}" data-hidx="${i}" value="${esc(room[tier.key] || '')}" placeholder="${tier.placeholder}" inputmode="numeric" />
+            <span class="currency">₮</span>
+          </div>
+        </label>
+      `).join('');
+      return `
       <div class="hotel-bed-block" data-hotel-room="${i}">
         <div class="hotel-bed-head">
           <div class="hotel-bed-title">${esc(hotelRoomTitle(room))}</div>
@@ -496,30 +506,15 @@ function renderVenueForm() {
             <input class="input" data-hbeds="${i}" value="${esc(room.beds || '')}" placeholder="1" inputmode="numeric" />
           </label>
         </div>
-        <div class="hotel-bed-row">
-          <label class="hotel-bed-col">
-            <span>Энгийн</span>
-            <div class="hotel-price-input">
-              <input class="input" data-hamount="${i}" value="${esc(room.amount || '')}" placeholder="180000" inputmode="numeric" />
-              <span class="currency">₮</span>
-            </div>
-          </label>
-          <label class="hotel-bed-col">
-            <span>Lux</span>
-            <div class="hotel-price-input">
-              <input class="input" data-hlux="${i}" value="${esc(room.luxAmount || '')}" placeholder="230000" inputmode="numeric" />
-              <span class="currency">₮</span>
-            </div>
-          </label>
-        </div>
-      </div>
-    `).join('');
+        <div class="hotel-bed-row hotel-tier-row">${tierInputs}</div>
+      </div>`;
+    }).join('');
     priceSection = `
       <label class="field"><span>Зочид буудлын од (1-5)</span>
         <input class="input" id="f-stars" value="${esc(f.hotelStars)}" placeholder="4" inputmode="numeric" /></label>
       <div class="field">
         <span>Өрөөний үнэ (хоног)</span>
-        <p class="hint">Хүний тоо, орны тоо засна — өрөө нэмэх/устгах</p>
+        <p class="hint">Энгийн, Хагас lux, Бүтэн lux, Тасалгаатай lux — байхгүйг хоосон үлдээнэ</p>
         <div class="hotel-beds">${roomsHtml || '<p class="muted small">Өрөө байхгүй. Нэмнэ үү.</p>'}</div>
         <button type="button" class="btn btn-sm" id="add-hotel-room" style="margin-top:10px">+ Өрөө нэмэх</button>
       </div>`;
@@ -632,18 +627,12 @@ function bindHotelRooms() {
       refreshTitle(i);
     };
   });
-  $$('[data-hamount]').forEach((el) => {
+  $$('[data-htier]').forEach((el) => {
     el.oninput = () => {
-      const i = Number(el.dataset.hamount);
-      rooms[i].amount = el.value.replace(/\D/g, '');
-      el.value = rooms[i].amount;
-    };
-  });
-  $$('[data-hlux]').forEach((el) => {
-    el.oninput = () => {
-      const i = Number(el.dataset.hlux);
-      rooms[i].luxAmount = el.value.replace(/\D/g, '');
-      el.value = rooms[i].luxAmount;
+      const i = Number(el.dataset.hidx);
+      const key = el.dataset.htier;
+      rooms[i][key] = el.value.replace(/\D/g, '');
+      el.value = rooms[i][key];
     };
   });
   $$('[data-rm-hotel-room]').forEach((btn) => {

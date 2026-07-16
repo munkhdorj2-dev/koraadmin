@@ -68,6 +68,13 @@ export const ACCOMMODATION_KINDS = [
   { id: 'custom', label: 'Бусад' },
 ];
 
+export const HOTEL_ROOM_TIERS = [
+  { key: 'amount', label: 'Энгийн', placeholder: '180000' },
+  { key: 'halfLux', label: 'Хагас lux', placeholder: '200000' },
+  { key: 'fullLux', label: 'Бүтэн lux', placeholder: '230000' },
+  { key: 'suiteLux', label: 'Тасалгаатай lux', placeholder: '280000' },
+];
+
 function newHotelRoomId() {
   return `hr${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -78,7 +85,9 @@ export function emptyHotelRoom(overrides = {}) {
     guests: '2',
     beds: '1',
     amount: '',
-    luxAmount: '',
+    halfLux: '',
+    fullLux: '',
+    suiteLux: '',
     ...overrides,
   };
 }
@@ -91,11 +100,21 @@ function digitsOnly(value) {
   return String(value || '').replace(/\D/g, '');
 }
 
+function tierAmounts(raw) {
+  const amount = digitsOnly(raw?.amount);
+  const fullLux = digitsOnly(raw?.fullLux ?? raw?.luxAmount);
+  return {
+    amount,
+    halfLux: digitsOnly(raw?.halfLux),
+    fullLux,
+    suiteLux: digitsOnly(raw?.suiteLux),
+  };
+}
+
 function normalizeHotelRoom(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const amount = digitsOnly(raw.amount);
-  const luxAmount = digitsOnly(raw.luxAmount);
-  if (!amount && !luxAmount) return null;
+  const tiers = tierAmounts(raw);
+  if (!HOTEL_ROOM_TIERS.some((t) => tiers[t.key])) return null;
   let beds = digitsOnly(raw.beds) || '1';
   let guests = digitsOnly(raw.guests);
   if (!guests) guests = String(Math.max(1, Number(beds) * 2));
@@ -103,8 +122,7 @@ function normalizeHotelRoom(raw) {
     id: raw.id || newHotelRoomId(),
     guests,
     beds,
-    amount,
-    luxAmount,
+    ...tiers,
   };
 }
 
@@ -112,14 +130,14 @@ function roomsFromLegacyFlat(obj) {
   const rooms = [];
   for (let beds = 1; beds <= 5; beds += 1) {
     const amount = digitsOnly(obj[`b${beds}`]);
-    const luxAmount = digitsOnly(obj[`b${beds}lux`]);
-    if (!amount && !luxAmount) continue;
+    const fullLux = digitsOnly(obj[`b${beds}lux`]);
+    if (!amount && !fullLux) continue;
     rooms.push(
       emptyHotelRoom({
         guests: String(beds * 2),
         beds: String(beds),
         amount,
-        luxAmount,
+        fullLux,
       })
     );
   }
@@ -163,7 +181,9 @@ export function serializeHotelPrices(rooms, stars) {
       guests: r.guests,
       beds: r.beds,
       amount: r.amount || null,
-      luxAmount: r.luxAmount || null,
+      halfLux: r.halfLux || null,
+      fullLux: r.fullLux || null,
+      suiteLux: r.suiteLux || null,
     })),
   });
 }
