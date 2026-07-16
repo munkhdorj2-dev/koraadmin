@@ -67,3 +67,66 @@ export const ACCOMMODATION_KINDS = [
   { id: 'wooden', label: 'Модон байшин' },
   { id: 'custom', label: 'Бусад' },
 ];
+
+/** Hotel room tiers: guests = beds × 2. Keys: b1 / b1lux … b5 / b5lux */
+export const HOTEL_BED_KEYS = [1, 2, 3, 4, 5].map((beds) => ({
+  key: String(beds),
+  stdKey: `b${beds}`,
+  luxKey: `b${beds}lux`,
+  label: `${beds * 2} хүний · ${beds} ортой`,
+  placeholder: String(100000 + beds * 50000),
+  luxPlaceholder: String(150000 + beds * 50000),
+}));
+
+export function emptyHotelPrices() {
+  const o = {};
+  HOTEL_BED_KEYS.forEach((bed) => {
+    o[bed.stdKey] = '';
+    o[bed.luxKey] = '';
+  });
+  return o;
+}
+
+export function parseHotelPrices(raw) {
+  const out = emptyHotelPrices();
+  if (!raw) return out;
+  let obj = raw;
+  if (typeof raw === 'string') {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return out;
+    }
+  }
+  if (!obj || typeof obj !== 'object') return out;
+  HOTEL_BED_KEYS.forEach((bed) => {
+    const std = obj[bed.stdKey];
+    const lux = obj[bed.luxKey];
+    out[bed.stdKey] = std != null && std !== '' ? String(std).replace(/\D/g, '') : '';
+    out[bed.luxKey] = lux != null && lux !== '' ? String(lux).replace(/\D/g, '') : '';
+  });
+  return out;
+}
+
+export function serializeHotelPrices(prices, stars) {
+  const body = {};
+  let hasAny = false;
+  HOTEL_BED_KEYS.forEach((bed) => {
+    const std = String(prices?.[bed.stdKey] || '').replace(/\D/g, '');
+    const lux = String(prices?.[bed.luxKey] || '').replace(/\D/g, '');
+    if (std) {
+      body[bed.stdKey] = std;
+      hasAny = true;
+    }
+    if (lux) {
+      body[bed.luxKey] = lux;
+      hasAny = true;
+    }
+  });
+  const starNum = Number(stars);
+  if (starNum >= 1 && starNum <= 5) {
+    body.stars = starNum;
+    hasAny = true;
+  }
+  return hasAny ? JSON.stringify(body) : '';
+}

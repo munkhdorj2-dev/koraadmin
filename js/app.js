@@ -1,5 +1,6 @@
 import {
   VENUE_TYPES, UB_DISTRICTS, REGIONS, FEATURES, FEATURE_LABELS, ACCOMMODATION_KINDS,
+  HOTEL_BED_KEYS,
 } from './data.js';
 import {
   initSupabase,
@@ -478,13 +479,36 @@ function renderVenueForm() {
 
   let priceSection = '';
   if (isHotel) {
+    const prices = f.hotelPrices || {};
+    const bedsHtml = HOTEL_BED_KEYS.map((bed) => `
+      <div class="hotel-bed-block">
+        <div class="hotel-bed-title">${esc(bed.label)}</div>
+        <div class="hotel-bed-row">
+          <label class="hotel-bed-col">
+            <span>Энгийн</span>
+            <div class="hotel-price-input">
+              <input class="input" data-hotel-price="${bed.stdKey}" value="${esc(prices[bed.stdKey] || '')}" placeholder="${bed.placeholder}" inputmode="numeric" />
+              <span class="currency">₮</span>
+            </div>
+          </label>
+          <label class="hotel-bed-col">
+            <span>Lux</span>
+            <div class="hotel-price-input">
+              <input class="input" data-hotel-price="${bed.luxKey}" value="${esc(prices[bed.luxKey] || '')}" placeholder="${bed.luxPlaceholder}" inputmode="numeric" />
+              <span class="currency">₮</span>
+            </div>
+          </label>
+        </div>
+      </div>
+    `).join('');
     priceSection = `
       <label class="field"><span>Зочид буудлын од (1-5)</span>
-        <input class="input" id="f-stars" value="${esc(f.hotelStars)}" placeholder="4" /></label>
-      <label class="field"><span>Өрөөний үнэ (JSON)</span>
-        <p class="hint">b1=2 хүний·1 ор, b2=4 хүний·2 ор … b1lux/b2lux = Lux</p>
-        <textarea class="input" id="f-hotel-json" rows="4" placeholder='{"b1":"180000","b1lux":"230000","stars":4}'>${esc(f.hotelPriceJson)}</textarea>
-      </label>`;
+        <input class="input" id="f-stars" value="${esc(f.hotelStars)}" placeholder="4" inputmode="numeric" /></label>
+      <div class="field">
+        <span>Өрөөний үнэ (хоног)</span>
+        <p class="hint">Ор бүрт энгийн + lux — байхгүйг хоосон үлдээнэ</p>
+        <div class="hotel-beds">${bedsHtml}</div>
+      </div>`;
   } else if (isResort) {
     const units = (f.accommodationUnits || []).map((u, i) => renderUnitRow(u, i)).join('');
     priceSection = `
@@ -554,6 +578,7 @@ function renderVenueForm() {
   $('#f-lat').oninput = updateLocationPreview;
   $('#f-lng').oninput = updateLocationPreview;
   bindImageGallery();
+  if (isHotel) bindHotelPrices();
   if (isResort) {
     $('#add-unit').onclick = () => {
       state.form.accommodationUnits.push({ id: `u${Date.now()}`, kind: 'ger', beds: '', label: '', amount: '', luxAmount: '' });
@@ -562,6 +587,17 @@ function renderVenueForm() {
     bindUnitRows();
   }
   requestAnimationFrame(() => initVenueMap());
+}
+
+function bindHotelPrices() {
+  if (!state.form.hotelPrices) state.form.hotelPrices = {};
+  $$('[data-hotel-price]').forEach((el) => {
+    el.oninput = () => {
+      const key = el.dataset.hotelPrice;
+      state.form.hotelPrices[key] = el.value.replace(/\D/g, '');
+      el.value = state.form.hotelPrices[key];
+    };
+  });
 }
 
 function buildImageGalleryHtml(images) {
@@ -758,7 +794,10 @@ async function saveVenueForm() {
     f.images = [...state.form.images].map((u) => (u || '').trim()).filter(Boolean);
     if (state.type === 'hotel') {
       f.hotelStars = $('#f-stars').value;
-      f.hotelPriceJson = $('#f-hotel-json').value;
+      f.hotelPrices = { ...(state.form.hotelPrices || {}) };
+      $$('[data-hotel-price]').forEach((el) => {
+        f.hotelPrices[el.dataset.hotelPrice] = el.value.replace(/\D/g, '');
+      });
     } else if (state.type !== 'resort') {
       f.price = $('#f-price').value;
     }

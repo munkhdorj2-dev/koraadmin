@@ -313,6 +313,56 @@ textarea.input { resize: vertical; min-height: 80px; }
   margin: 8px 0 0;
   padding: 0 2px;
 }
+.hotel-beds {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+.hotel-bed-block {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+.hotel-bed-title {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 10px;
+  color: var(--text);
+}
+.hotel-bed-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.hotel-bed-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hotel-bed-col > span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.hotel-price-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hotel-price-input .input {
+  flex: 1;
+  min-width: 0;
+}
+.hotel-price-input .currency {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+@media (max-width: 520px) {
+  .hotel-bed-row { grid-template-columns: 1fr; }
+}
 .request-list { display: flex; flex-direction: column; gap: 12px; }
 .request-card {
   background: var(--card);
