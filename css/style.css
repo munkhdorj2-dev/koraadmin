@@ -129,6 +129,69 @@ textarea.input { resize: vertical; min-height: 80px; }
 .steps { padding-left: 20px; }
 .steps li { margin-bottom: 8px; }
 .img-row, .unit-card { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.img-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.img-gallery-empty { margin: 0 0 8px; }
+.img-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.img-card-cover {
+  border-color: rgba(255, 107, 53, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 107, 53, 0.2);
+}
+.img-card-preview {
+  position: relative;
+  height: 140px;
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.img-card-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.img-placeholder {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.img-cover-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.img-card-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.img-url-input {
+  font-size: 12px;
+  padding: 8px 10px;
+}
+.img-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
 .unit-card { flex-wrap: wrap; }
 .unit-card .input { flex: 1; min-width: 100px; }
 .upload-label { display: inline-block; cursor: pointer; margin-left: 8px; }

@@ -475,12 +475,6 @@ function renderVenueForm() {
   const featureChecks = FEATURES.map((key) => `
     <label class="check-label"><input type="checkbox" data-feat="${key}" ${f.features[key] ? 'checked' : ''} /> ${FEATURE_LABELS[key] || key}</label>
   `).join('');
-  const imageList = f.images.map((url, i) => `
-    <div class="img-row">
-      <input class="input" data-img="${i}" value="${esc(url)}" placeholder="Зурагны URL" />
-      <button type="button" class="btn btn-sm btn-danger" data-rmimg="${i}">×</button>
-    </div>
-  `).join('');
 
   let priceSection = '';
   if (isHotel) {
@@ -536,11 +530,12 @@ function renderVenueForm() {
       <label class="field"><span>Facebook</span><input class="input" id="f-fb" value="${esc(f.facebook)}" /></label>
       <label class="field"><span>Instagram</span><input class="input" id="f-ig" value="${esc(f.instagram)}" /></label>
       <div class="field">
-        <span>Зургууд (URL)</span>
-        <div id="images-wrap">${imageList}</div>
+        <span>Зургууд</span>
+        <p class="hint">Эхний зураг нь cover (гол зураг). ↑↓ эсвэл «Cover» дарж дараалал солино.</p>
+        <div id="images-wrap" class="img-gallery">${buildImageGalleryHtml(f.images)}</div>
         <div class="toolbar compact">
           <button type="button" class="btn btn-sm" id="add-img">+ URL нэмэх</button>
-          <label class="btn btn-sm upload-label">📷 Upload<input type="file" id="file-upload" accept="image/*" hidden /></label>
+          <label class="btn btn-sm upload-label">📷 Upload<input type="file" id="file-upload" accept="image/*" multiple hidden /></label>
         </div>
       </div>
       <div class="field"><span>Боломжууд</span><div class="checks-grid">${featureChecks}</div></div>
@@ -557,30 +552,7 @@ function renderVenueForm() {
   $('#my-loc').onclick = useMyLocation;
   $('#f-lat').oninput = updateLocationPreview;
   $('#f-lng').oninput = updateLocationPreview;
-  $('#add-img').onclick = () => {
-    state.form.images.push('');
-    renderVenueForm();
-  };
-  $$('[data-rmimg]').forEach((btn) => {
-    btn.onclick = () => {
-      state.form.images.splice(Number(btn.dataset.rmimg), 1);
-      renderVenueForm();
-    };
-  });
-  $$('[data-img]').forEach((inp) => {
-    inp.oninput = () => { state.form.images[Number(inp.dataset.img)] = inp.value; };
-  });
-  $('#file-upload').onchange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const url = await uploadImage(file, `venues/${state.type}/${Date.now()}.jpg`);
-      state.form.images.push(url);
-      renderVenueForm();
-    } catch (err) {
-      showError(err.message);
-    }
-  };
+  bindImageGallery();
   if (isResort) {
     $('#add-unit').onclick = () => {
       state.form.accommodationUnits.push({ id: `u${Date.now()}`, kind: 'ger', beds: '', label: '', amount: '', luxAmount: '' });
@@ -589,6 +561,145 @@ function renderVenueForm() {
     bindUnitRows();
   }
   requestAnimationFrame(() => initVenueMap());
+}
+
+function buildImageGalleryHtml(images) {
+  const list = images || [];
+  if (!list.length) {
+    return '<p class="muted small img-gallery-empty">Зураг байхгүй. Upload эсвэл URL нэмнэ үү.</p>';
+  }
+  return list.map((url, i) => {
+    const isCover = i === 0;
+    const hasUrl = Boolean((url || '').trim());
+    return `
+      <div class="img-card ${isCover ? 'img-card-cover' : ''}">
+        <div class="img-card-preview">
+          ${hasUrl
+            ? `<img src="${escAttr(url)}" alt="" loading="lazy" />`
+            : '<div class="img-placeholder">Preview</div>'}
+          ${isCover ? '<span class="img-cover-badge">Cover</span>' : ''}
+        </div>
+        <div class="img-card-body">
+          <input class="input img-url-input" data-img="${i}" value="${esc(url)}" placeholder="Зурагны URL" />
+          <div class="img-card-actions">
+            <button type="button" class="btn btn-sm btn-ghost sort-btn" data-img-up="${i}" ${i === 0 ? 'disabled' : ''} title="Дээш">↑</button>
+            <button type="button" class="btn btn-sm btn-ghost sort-btn" data-img-down="${i}" ${i >= list.length - 1 ? 'disabled' : ''} title="Доош">↓</button>
+            ${!isCover ? `<button type="button" class="btn btn-sm" data-img-cover="${i}">Cover</button>` : ''}
+            <button type="button" class="btn btn-sm btn-danger" data-rmimg="${i}">×</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function syncImagesFromInputs() {
+  $$('[data-img]').forEach((inp) => {
+    const i = Number(inp.dataset.img);
+    if (state.form.images[i] !== undefined) {
+      state.form.images[i] = inp.value;
+    }
+  });
+}
+
+function updateImageGallery() {
+  const wrap = $('#images-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = buildImageGalleryHtml(state.form.images);
+  bindImageGallery();
+}
+
+function bindImageGallery() {
+  const addBtn = $('#add-img');
+  const uploadInput = $('#file-upload');
+  if (addBtn) {
+    addBtn.onclick = () => {
+      syncImagesFromInputs();
+      state.form.images.push('');
+      updateImageGallery();
+    };
+  }
+  if (uploadInput) {
+    uploadInput.onchange = async (e) => {
+      const files = [...(e.target.files || [])];
+      if (!files.length) return;
+      syncImagesFromInputs();
+      try {
+        for (const file of files) {
+          const url = await uploadImage(file, `venues/${state.type}/${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`);
+          state.form.images.push(url);
+        }
+        updateImageGallery();
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        uploadInput.value = '';
+      }
+    };
+  }
+  $$('[data-img]').forEach((inp) => {
+    inp.oninput = () => {
+      const i = Number(inp.dataset.img);
+      state.form.images[i] = inp.value;
+      const card = inp.closest('.img-card');
+      const preview = card?.querySelector('.img-card-preview');
+      if (!preview) return;
+      const trimmed = inp.value.trim();
+      let img = preview.querySelector('img');
+      const placeholder = preview.querySelector('.img-placeholder');
+      if (trimmed) {
+        if (!img) {
+          img = document.createElement('img');
+          img.loading = 'lazy';
+          preview.insertBefore(img, preview.firstChild);
+        }
+        img.src = trimmed;
+        img.alt = '';
+        if (placeholder) placeholder.remove();
+      } else if (img) {
+        img.remove();
+        if (!preview.querySelector('.img-placeholder')) {
+          const ph = document.createElement('div');
+          ph.className = 'img-placeholder';
+          ph.textContent = 'Preview';
+          preview.insertBefore(ph, preview.firstChild);
+        }
+      }
+    };
+  });
+  $$('[data-rmimg]').forEach((btn) => {
+    btn.onclick = () => {
+      syncImagesFromInputs();
+      state.form.images.splice(Number(btn.dataset.rmimg), 1);
+      updateImageGallery();
+    };
+  });
+  $$('[data-img-up]').forEach((btn) => {
+    btn.onclick = () => moveImage(Number(btn.dataset.imgUp), 'up');
+  });
+  $$('[data-img-down]').forEach((btn) => {
+    btn.onclick = () => moveImage(Number(btn.dataset.imgDown), 'down');
+  });
+  $$('[data-img-cover]').forEach((btn) => {
+    btn.onclick = () => setImageCover(Number(btn.dataset.imgCover));
+  });
+}
+
+function moveImage(index, direction) {
+  syncImagesFromInputs();
+  const list = state.form.images;
+  const swapIdx = direction === 'up' ? index - 1 : index + 1;
+  if (swapIdx < 0 || swapIdx >= list.length) return;
+  [list[index], list[swapIdx]] = [list[swapIdx], list[index]];
+  updateImageGallery();
+}
+
+function setImageCover(index) {
+  if (index <= 0) return;
+  syncImagesFromInputs();
+  const [item] = state.form.images.splice(index, 1);
+  state.form.images.unshift(item);
+  updateImageGallery();
 }
 
 function renderUnitRow(u, i) {
@@ -642,7 +753,8 @@ async function saveVenueForm() {
     f.show_price = $('#f-showprice').checked;
     f.features = {};
     $$('[data-feat]').forEach((cb) => { if (cb.checked) f.features[cb.dataset.feat] = true; });
-    f.images = [...state.form.images].filter(Boolean);
+    syncImagesFromInputs();
+    f.images = [...state.form.images].map((u) => (u || '').trim()).filter(Boolean);
     if (state.type === 'hotel') {
       f.hotelStars = $('#f-stars').value;
       f.hotelPriceJson = $('#f-hotel-json').value;
