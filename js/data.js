@@ -48,7 +48,7 @@ export const FEATURES = [
 
 export const FEATURE_LABELS = {
   wifi: 'Wifi', parking: 'Зогсоол', outdoorParking: 'Ил зогсоол', garage: 'Граж',
-  sound: 'Дуу систем', kitchen: 'Хоол ундаа', restaurant: 'Ресторан',
+  sound: 'Дуу систем', kitchen: 'Хоол үйлчилгээтэй', restaurant: 'Ресторан',
   outdoorDining: 'Гадна хоол', coffeeShop: 'Кофе шоп', bar: 'Бар', alcohol: 'Alcohol',
   mic: 'Микрофон', vip: 'VIP', speaker: 'Спикер', kidsRoom: 'Хүүхдийн өрөө',
   liveMusic: 'Амьд хөгжим', shisha: 'Shisha', terrace: 'Террас', smokingRoom: 'Тамхины өрөө',
